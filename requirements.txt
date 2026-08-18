@@ -1,0 +1,9 @@
+# Lab 1-B 依赖 —— 都跑在你的 CPU lab 里。
+# 注意:torch / torchvision **不在这里**。训练发生在 GPU 沙箱上,那台机器自带。
+# 你本地不需要装 PyTorch,也装不动(几个 G)。
+
+anthropic>=0.40.0      # LLM 客户端(指向 Parallight 代理)
+python-dotenv>=1.0.0   # 读 .env
+pyyaml>=6.0            # 读 config.yaml
+httpx>=0.27            # 飞书 webhook。挑战服务用标准库 urllib,不额外依赖
+pytest>=8.0.0          # 跑 tests/

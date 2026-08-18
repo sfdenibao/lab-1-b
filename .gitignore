@@ -1,0 +1,19 @@
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# 凭据。进了 git 历史就删不掉了 —— 只能改密码。
+.env
+
+# 跑出来的东西。predictions.json 是几千行整数,train.log 是几万 token。
+run/predictions.json
+run/train.log
+run/report.json
+run/report.md
+run/tuning-notes.md
+run/_*.txt
+
+# 但 evidence.jsonl **要**提交 —— 它是证据链本身,
+# 也是让 GitHub 别把定时 workflow 当「60 天闲置」停掉的那次提交。
+!run/evidence.jsonl

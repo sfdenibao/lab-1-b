@@ -1,0 +1,71 @@
+# 每日自动跑 · GitHub Actions 工作流模板(第 7 幕 / kp-07)
+#
+# 放到你那个仓库的 .github/workflows/daily.yml —— GitHub 就会每天免费替你跑,
+# 你关掉电脑也照跑。三层别搞混:
+#
+#   schedule(闹钟:决定 WHEN) → autopilot.py(agent:决定 WHAT) → API/SMTP(手:真去碰世界)
+#
+# MCP server 也好、你的 agent 也好,自己**都没有时钟** —— 它们只在被叫醒时才动。
+# 闹钟必须在外面。这就是为什么「常驻」这件事要靠 Actions 而不是靠 agent 自己。
+#
+# 免费额度:public 仓库无限分钟;private 仓库 GitHub Free 每月 2000 分钟。日报 1–2 分钟,够用。
+#
+# ⚠️ 凭据放 仓库 Settings → Secrets and variables → Actions,绝不写进这个 YAML。
+#    注意 secret 名字**不能以 GITHUB_ 开头**(GitHub 保留),所以叫 GH_LAB_TOKEN。
+
+name: daily-automl
+
+on:
+  schedule:
+    - cron: "17 1 * * *"      # UTC 01:17 = 北京 09:17。避开整点 —— 整点是全球高峰,会被延迟甚至丢任务。
+  workflow_dispatch:
+    inputs:
+      train:
+        description: "跑完整一轮(会启动 A10 GPU、真扣额度)"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write             # 让它能把 run/evidence.jsonl 提交回仓库
+
+jobs:
+  automl:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+
+      - name: run autopilot
+        env:
+          PARALLIGHT_API_KEY: ${{ secrets.PARALLIGHT_API_KEY }}
+          PARALLIGHT_BASE_URL: https://token.parallight.ai/api/llm
+          ANTHROPIC_AUTH_TOKEN: ${{ secrets.PARALLIGHT_API_KEY }}
+          # 渠道 A(默认):Gmail
+          GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          MAIL_TO: ${{ secrets.MAIL_TO }}
+          # 渠道 B(在大陆):把 config.yaml 的 channel 改成 feishu,并配这个
+          FEISHU_WEBHOOK_URL: ${{ secrets.FEISHU_WEBHOOK_URL }}
+          #
+          # ⚠️ 花钱的闸在这里:定时触发时 inputs.train 是空的 → 不带 --train、
+          #    AUTOPILOT_ALLOW_GPU 也不为 1 → 物理上走不到 GPU 那条路径。
+          #    只有你在 Actions 页手动勾了 train,这一轮才有可能烧额度。
+          AUTOPILOT_ALLOW_GPU: ${{ github.event.inputs.train == 'true' && '1' || '0' }}
+        run: |
+          if [ "${{ github.event.inputs.train }}" = "true" ]; then
+            python autopilot.py --train
+          else
+            python autopilot.py
+          fi
+
+      - name: persist evidence
+        # 把证据账本提交回仓库:既是「窗口外的记忆」,又顺手避开 GitHub
+        # 「60 天没有提交就停用定时 workflow」那条规则。
+        run: |
+          git config user.name "automl-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add run/evidence.jsonl 2>/dev/null || true
+          git commit -m "evidence $(date -u +%F)" 2>/dev/null && git push || echo "no change"
